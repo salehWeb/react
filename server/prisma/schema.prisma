@@ -1,0 +1,30 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // if you use supabase db you need to set the following line and no need to set the url its undefined
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+model User {
+  id        String     @id @unique @default(cuid())
+  name      String
+  role      Role       @default(USER)
+  email     String     @unique
+  method    SingUpRole @default(CUSTOM)
+  password  String?
+  createdAt DateTime   @default(now())
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum SingUpRole {
+  PROVIDER
+  CUSTOM
+}
