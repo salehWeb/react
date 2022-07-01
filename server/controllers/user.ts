@@ -1,27 +1,60 @@
-import { hashSync, genSaltSync } from 'bcryptjs';
+import { hashSync, genSaltSync, compareSync } from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Request, Response } from "express";
-
 import { PrismaClient } from '@prisma/client';
+
+
+
 const prisma = new PrismaClient();
 
 interface UserType {
     name: string,
     email: string,
     password?: string,
-    role?: string,
-    token?: string
+    method?: Boolean
 }
 
 export const login = async (req: Request, res: Response) => {
-    const { email } = req.body as UserType;
-
+    const { email, password, method } = req.body as UserType;
+    const user = await prisma.user.findUnique({ where: { email: email } });
     try {
-        const user = await prisma.user.findFirst({ where: { email } })
 
-        if (!user) return res.status(400).json({ error: `this user not exist ${email}` })
+        if (!user) return res.status(400).json({ error: `user with this email ${email} dose not exist` })
 
-        else return res.status(200).json({ user })
+        else {
+            if (password && email) {
+                const isMatch = compareSync(password, user.password)
+                if (!isMatch) return res.status(400).json({ error: `password is incorrect` })
+                else {
+                    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET as string, { expiresIn: '2h' });
+
+                    res.cookie('token', token, {
+                        maxAge: 1000 * 60 * 60 * 2, // 2 hours
+                        expires: new Date(Date.now() + 1000 * 60 * 60 * 2), // 2 hours
+                        httpOnly: true,
+                        secure: process.env.NODE_ENV === 'production',
+                        sameSite: 'strict'
+                    })
+
+                    return res.status(200).json({ user, massage: "login success" })
+                }
+            } else if (method && email && user.method === "PROVIDER") {
+                const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET as string, { expiresIn: '2h' });
+
+                res.cookie('token', token, {
+                    maxAge: 1000 * 60 * 60 * 2, // 2 hours
+                    expires: new Date(Date.now() + 1000 * 60 * 60 * 2), // 2 hours
+                    httpOnly: true,
+                    secure: process.env.NODE_ENV === 'production',
+                    sameSite: 'strict'
+                })
+
+                return res.status(200).json({ user, massage: "login success" })
+
+            }
+
+            else return res.status(400).json({ error: 'you must fill all fields or sing up with google or github' })
+        }
     } catch (error) {
         console.log(error)
     }
@@ -31,15 +64,12 @@ export const login = async (req: Request, res: Response) => {
 
 
 export const singUp = async (req: Request, res: Response) => {
-
-    const { email, name, password } = req.body as UserType;
-
+    const { email, name, password, method } = req.body as UserType;
+    const user = await prisma.user.findUnique({ where: { email: email } })
     try {
-        const user = await prisma.user.findFirst({ where: { email } })
-
 
         if (!user) {
-            if (password) {
+            if (password && name && email && !method) {
                 const salt = genSaltSync(10);
                 const hashPassword = hashSync(password, salt)
                 const newUser = await prisma.user.create({
@@ -49,21 +79,52 @@ export const singUp = async (req: Request, res: Response) => {
                         password: hashPassword
                     }
                 })
-                return res.status(200).json({ newUser })
-            } else {
-                jwt
+
+                const token = jwt.sign({ id: newUser.id, }, process.env.JWT_SECRET as string, { expiresIn: '2h' })
+
+                res.cookie('token', token, {
+                    maxAge: 1000 * 60 * 60 * 2, // 2 hours
+                    expires: new Date(Date.now() + 1000 * 60 * 60 * 2), // 2 hours
+                    httpOnly: true,
+                    secure: process.env.NODE_ENV === 'production',
+                    sameSite: 'strict'
+                })
+
+                return res.status(200).json({ newUser, massage: "sing up success" })
+            }
+            else if (name && email && method) {
+
                 const newUser = await prisma.user.create({
                     data: {
                         name,
                         email,
-                        method: 'PROVIDER'
+                        method: 'PROVIDER',
                     }
                 })
-                return res.status(200).json({ newUser })
+
+                const token = jwt.sign({ id: newUser.id, role: user.role }, process.env.JWT_SECRET as string, { expiresIn: '2h' })
+
+                res.cookie('token', token, {
+                    maxAge: 1000 * 60 * 60 * 2, // 2 hours
+                    expires: new Date(Date.now() + 1000 * 60 * 60 * 2), // 2 hours
+                    httpOnly: true,
+                    secure: process.env.NODE_ENV === 'production',
+                    sameSite: 'strict'
+                })
+
+                return res.status(200).json({ newUser, massage: "sing up success" })
             }
+
+            else return res.status(400).json({ error: 'you must fill all fields or sing up with google or github' })
+
         }
         else return res.status(400).json({ error: "user already exist try login" })
     } catch (error) {
         console.log(error)
     }
+}
+
+export const logout = async (req: Request, res: Response) => {
+    res.clearCookie('token');
+    return res.status(200).json({ massage: "logout success model" })
 }

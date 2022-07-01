@@ -5,12 +5,12 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  // if you use supabase db you need to set the following line and no need to set the url its undefined
-  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+  // data base url must be end by "?schema=public&pgbouncer=true&sslmode=require"
 }
 
-model User {
-  id        String     @id @unique @default(cuid())
+
+model user {
+  id        String     @id @unique @default(uuid())
   name      String
   role      Role       @default(USER)
   email     String     @unique
