@@ -128,3 +128,46 @@ export const logout = async (req: Request, res: Response) => {
     res.clearCookie('token');
     return res.status(200).json({ massage: "logout success model" })
 }
+
+
+export const googleAuth = async (req: Request, res: Response) => {
+    const { id_token } = req.body;
+    const googleUser = await prisma.user.findUnique({ where: { googleId: id_token } });
+    try {
+        if (!googleUser) {
+            const newUser = await prisma.user.create({
+                data: {
+                    googleId: id_token,
+                    method: 'PROVIDER'
+                }
+            })
+
+            const token = jwt.sign({ id: newUser.id, role: newUser.role }, process.env.JWT_SECRET as string, { expiresIn: '2h' })
+
+            res.cookie('token', token, {
+                maxAge: 1000 * 60 * 60 * 2, // 2 hours
+                expires: new Date(Date.now() + 1000 * 60 * 60 * 2), // 2 hours
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'strict'
+            })
+
+            return res.status(200).json({ newUser, massage: "sing up success" })
+        }
+        else {
+            const token = jwt.sign({ id: googleUser.id, role: googleUser.role }, process.env.JWT_SECRET as string, { expiresIn: '2h' })
+
+            res.cookie('token', token, {
+                maxAge: 1000 * 60 * 60 * 2, // 2 hours
+                expires: new Date(Date.now() + 1000 * 60 * 60 * 2), // 2 hours
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'strict'
+            })
+
+            return res.status(200).json({ googleUser, massage: "sing up success" })
+        }
+    } catch (error) {
+        console.log(error)
+    }
+}
